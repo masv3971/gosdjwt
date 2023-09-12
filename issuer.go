@@ -2,19 +2,20 @@ package gosdjwt
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 )
 
-type instruction struct {
-	children []instruction
+// Instruction instructs how to build a SD-JWT
+type Instruction struct {
+	children []Instruction
 	value    any
 	name     string
 	sd       bool
 }
 
+// Disclosure keeps a disclosure
 type Disclosure struct {
 	salt   string
 	value  any
@@ -28,16 +29,16 @@ var salt = func() string {
 	return uuid.NewString()
 }
 
-func (d disclosures) add(i instruction) {
+func (d disclosures) add(i Instruction) {
 	d[salt()] = Disclosure{
 		salt:   salt(),
-		value:  "xyz",
+		value:  i.value,
 		name:   i.name,
 		sdHash: i.makeHash(),
 	}
 }
 
-func (d disclosures) addValue(i instruction, parentName string) {
+func (d disclosures) addValue(i Instruction, parentName string) {
 	d[salt()] = Disclosure{
 		salt:   salt(),
 		value:  i.value,
@@ -45,19 +46,11 @@ func (d disclosures) addValue(i instruction, parentName string) {
 	}
 }
 
-func (d disclosures) addParent(i instruction, parentName string) {
+func (d disclosures) addParent(i Instruction, parentName string) {
 	d[salt()] = Disclosure{
 		salt:   salt(),
-		value:  "xyz",
+		value:  i.value,
 		name:   parentName,
-		sdHash: i.makeHash(),
-	}
-}
-
-func (d disclosures) addArray(i instruction, parentName string) {
-	d[salt()] = Disclosure{
-		salt:   salt(),
-		value:  "xyz",
 		sdHash: i.makeHash(),
 	}
 }
@@ -79,20 +72,12 @@ func (d disclosures) makeArray() []Disclosure {
 	return a
 }
 
-func (d disclosures) makeSortedArray() []Disclosure {
-	s := d.makeArray()
-	sort.SliceStable(s, func(i, j int) bool {
-		return s[i].name > s[j].name
-	})
-	return s
-}
-
-func (i instruction) hasChildren() bool {
+func (i Instruction) hasChildren() bool {
 	return i.children != nil
 }
 
 // isArrayValue returns true if the instruction lacks a name but has a value
-func (i instruction) isArrayValue() bool {
+func (i Instruction) isArrayValue() bool {
 	if i.name == "" {
 		if i.value != nil {
 			return true
@@ -101,11 +86,11 @@ func (i instruction) isArrayValue() bool {
 	return false
 }
 
-func (i instruction) makeHash() string {
+func (i Instruction) makeHash() string {
 	return "xyz"
 }
 
-type instructions []instruction
+type instructions []Instruction
 
 func untangle(parentStorage jwt.MapClaims, parentName string, instructions instructions, storage jwt.MapClaims) {
 	for _, v := range instructions {
@@ -174,7 +159,7 @@ func addToMap(parentName, childName string, value any, storage jwt.MapClaims) {
 	}
 }
 
-func (i instruction) collectAllChildClaims() {
+func (i Instruction) collectAllChildClaims() {
 	t := jwt.MapClaims{}
 	for _, v := range i.children {
 		if !v.hasChildren() {
@@ -184,7 +169,7 @@ func (i instruction) collectAllChildClaims() {
 	i.value = t
 }
 
-func (i *instruction) addChildrenToParentValue(storage jwt.MapClaims) {
+func (i *Instruction) addChildrenToParentValue(storage jwt.MapClaims) {
 	i.collectAllChildClaims()
 	i.makeHash()
 	addToArray("_sd", i.makeHash(), storage)

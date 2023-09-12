@@ -15,13 +15,13 @@ func TestUntangle(t *testing.T) {
 	tts := []struct {
 		name         string
 		run          bool
-		instructions []instruction
+		instructions []Instruction
 		want         jwt.Claims
 	}{
 		{
 			name: "no children",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name:  "birthdate",
 					value: "1970-01-01",
@@ -41,10 +41,10 @@ func TestUntangle(t *testing.T) {
 		{
 			run:  true,
 			name: "simple with children",
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -66,10 +66,10 @@ func TestUntangle(t *testing.T) {
 		{
 			run:  true,
 			name: "two children",
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -96,10 +96,10 @@ func TestUntangle(t *testing.T) {
 		{
 			run:  true,
 			name: "children array",
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "nationalities",
-					children: []instruction{
+					children: []Instruction{
 						{
 							value: "se",
 						},
@@ -124,10 +124,10 @@ func TestUntangle(t *testing.T) {
 		{
 			run:  true,
 			name: "complete",
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "nationalities",
-					children: []instruction{
+					children: []Instruction{
 						{
 							value: "se",
 						},
@@ -152,7 +152,7 @@ func TestUntangle(t *testing.T) {
 				},
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -200,14 +200,14 @@ func TestMakeSD(t *testing.T) {
 	tts := []struct {
 		name         string
 		run          bool
-		instructions []instruction
+		instructions []Instruction
 		wantSDJWT    jwt.Claims
 		wantDisclose []Disclosure
 	}{
 		{
 			name: "no children, one _sd",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name:  "birthdate",
 					value: "1970-01-01",
@@ -222,7 +222,7 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "1970-01-01",
 					name:   "birthdate",
 					sdHash: "xyz",
 				},
@@ -231,7 +231,7 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "no children, two _sd",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name:  "birthdate",
 					value: "1970-01-01",
@@ -252,13 +252,13 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "1970-01-01",
 					sdHash: "xyz",
 					name:   "birthdate",
 				},
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "test@example.com",
 					sdHash: "xyz",
 					name:   "email",
 				},
@@ -267,7 +267,7 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "no children, one _sd of two claims",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name:  "birthdate",
 					value: "1970-01-01",
@@ -288,7 +288,7 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "1970-01-01",
 					sdHash: "xyz",
 					name:   "birthdate",
 				},
@@ -297,10 +297,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent one child, one claim, sd all parent",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -317,7 +317,7 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "testgatan 3",
 					sdHash: "xyz",
 					name:   "address",
 				},
@@ -326,10 +326,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "two parent one child per, one claim, sd all parent",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -339,7 +339,7 @@ func TestMakeSD(t *testing.T) {
 				},
 				{
 					name: "name",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "given_name",
 							value: "test",
@@ -357,13 +357,13 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "testgatan 3",
 					sdHash: "xyz",
 					name:   "address",
 				},
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "test",
 					sdHash: "xyz",
 					name:   "name",
 				},
@@ -372,10 +372,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one child, one _sd claim, keep parent visible",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -394,7 +394,7 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "testgatan 3",
 					sdHash: "xyz",
 					name:   "street_address",
 				},
@@ -403,10 +403,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent two children, individual sd for each claim, keep parent visible",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -431,13 +431,13 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "testgatan 3",
 					sdHash: "xyz",
 					name:   "street_address",
 				},
 				{
 					salt:   "salt_zyx",
-					value:  "xyz",
+					value:  "sweden",
 					sdHash: "xyz",
 					name:   "country",
 				},
@@ -446,10 +446,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent two children, one sd claim, keep parent visible",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "address",
-					children: []instruction{
+					children: []Instruction{
 						{
 							name:  "street_address",
 							value: "testgatan 3",
@@ -474,7 +474,7 @@ func TestMakeSD(t *testing.T) {
 			wantDisclose: []Disclosure{
 				{
 					salt:   "zyx",
-					value:  "xyz",
+					value:  "testgatan 3",
 					sdHash: "xyz",
 					name:   "street_address",
 				},
@@ -483,10 +483,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent with two array-like children claims with sd claim for each child, keep parent visible",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "nationalities",
-					children: []instruction{
+					children: []Instruction{
 						{
 							value: "se",
 							sd:    true,
@@ -524,10 +524,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent with two array-like children claims with one sd claim for one child",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "nationalities",
-					children: []instruction{
+					children: []Instruction{
 						{
 							value: "se",
 							sd:    true,
@@ -558,10 +558,10 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one parent with two array-like children claims with one sd claim for one child, reverse order",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name: "nationalities",
-					children: []instruction{
+					children: []Instruction{
 						{
 							value: "se",
 							sd:    false,
@@ -592,7 +592,7 @@ func TestMakeSD(t *testing.T) {
 		{
 			name: "one sd claim and one non-sd claim",
 			run:  true,
-			instructions: []instruction{
+			instructions: []Instruction{
 				{
 					name:  "birthdate",
 					value: "1970-01-01",
@@ -613,7 +613,7 @@ func TestMakeSD(t *testing.T) {
 				{
 					salt:   "salt_zyx",
 					name:   "birthdate",
-					value:  "xyz",
+					value:  "1970-01-01",
 					sdHash: "xyz",
 				},
 			},
