@@ -125,42 +125,6 @@ func (i *Instruction) makeDisclosureHash() {
 
 type instructions []*Instruction
 
-func untangle(parentStorage jwt.MapClaims, parentName string, instructions instructions, storage jwt.MapClaims) {
-	for _, v := range instructions {
-		if v.hasChildren() {
-			untangle(parentStorage, v.name, v.children, storage)
-		} else {
-			if parentName == "" {
-				storage[v.name] = v.value
-			} else {
-				if v.isArrayValue() {
-					value := []any{v.value}
-
-					claim, ok := storage[parentName]
-					if !ok {
-						storage[parentName] = value
-					} else {
-						storage[parentName] = append(claim.([]any), value...)
-					}
-					fmt.Println("value", v.value, "parentName", parentName)
-				} else {
-					parentStorage = jwt.MapClaims{
-						v.name: v.value,
-					}
-					fmt.Println("parentStorage", parentStorage)
-					claim, ok := storage[parentName]
-					if !ok {
-						storage[parentName] = parentStorage
-					} else {
-						claim.(jwt.MapClaims)[v.name] = v.value
-					}
-					fmt.Println("storage", storage)
-				}
-			}
-		}
-	}
-}
-
 func addToArray(key string, value any, storage jwt.MapClaims) {
 	claim, ok := storage[key]
 	if !ok {

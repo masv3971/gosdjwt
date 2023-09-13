@@ -2,7 +2,6 @@ package gosdjwt
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -11,191 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestUntangle(t *testing.T) {
-	tts := []struct {
-		name         string
-		run          bool
-		instructions []*Instruction
-		want         jwt.Claims
-	}{
-		{
-			name: "no children",
-			run:  true,
-			instructions: []*Instruction{
-				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
-				},
-				{
-					name:  "sub",
-					value: "test-1",
-					sd:    true,
-				},
-			},
-			want: jwt.MapClaims{
-				"birthdate": "1970-01-01",
-				"sub":       "test-1",
-			},
-		},
-		{
-			run:  true,
-			name: "simple with children",
-			instructions: []*Instruction{
-				{
-					name: "address",
-					children: []*Instruction{
-						{
-							name:  "street_address",
-							value: "testgatan 3",
-						},
-					},
-				},
-				{
-					name:  "sub",
-					value: "test-1",
-				},
-			},
-			want: jwt.MapClaims{
-				"address": jwt.MapClaims{
-					"street_address": "testgatan 3",
-				},
-				"sub": "test-1",
-			},
-		},
-		{
-			run:  true,
-			name: "two children",
-			instructions: []*Instruction{
-				{
-					name: "address",
-					children: []*Instruction{
-						{
-							name:  "street_address",
-							value: "testgatan 3",
-						},
-						{
-							name:  "country",
-							value: "sweden",
-						},
-					},
-				},
-				{
-					name:  "sub",
-					value: "test-1",
-				},
-			},
-			want: jwt.MapClaims{
-				"address": jwt.MapClaims{
-					"street_address": "testgatan 3",
-					"country":        "sweden",
-				},
-				"sub": "test-1",
-			},
-		},
-		{
-			run:  true,
-			name: "children array",
-			instructions: []*Instruction{
-				{
-					name: "nationalities",
-					children: []*Instruction{
-						{
-							value: "se",
-						},
-						{
-							value: "uk",
-						},
-					},
-				},
-				{
-					name:  "sub",
-					value: "test-1",
-				},
-			},
-			want: jwt.MapClaims{
-				"nationalities": []any{
-					"se",
-					"uk",
-				},
-				"sub": "test-1",
-			},
-		},
-		{
-			run:  true,
-			name: "complete",
-			instructions: []*Instruction{
-				{
-					name: "nationalities",
-					children: []*Instruction{
-						{
-							value: "se",
-						},
-						{
-							value: "uk",
-						},
-					},
-				},
-				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
-				},
-				{
-					name:  "updated_at",
-					value: 1570000000,
-				},
-				{
-					name:  "sub",
-					value: "test-1",
-					sd:    true,
-				},
-				{
-					name: "address",
-					children: []*Instruction{
-						{
-							name:  "street_address",
-							value: "testgatan 3",
-						},
-						{
-							name:  "country",
-							value: "sweden",
-						},
-					},
-				},
-			},
-			want: jwt.MapClaims{
-				"nationalities": []any{
-					"se",
-					"uk",
-				},
-				"sub":        "test-1",
-				"birthdate":  "1970-01-01",
-				"updated_at": 1570000000,
-				"address": jwt.MapClaims{
-					"street_address": "testgatan 3",
-					"country":        "sweden",
-				},
-			},
-		},
-	}
-	for _, tt := range tts {
-		if !tt.run {
-			t.SkipNow()
-		}
-		t.Run(tt.name, func(t *testing.T) {
-			storage := jwt.MapClaims{}
-			untangle(jwt.MapClaims{}, "", tt.instructions, storage)
-			fmt.Println(storage)
-			b, err := json.Marshal(storage)
-			assert.NoError(t, err)
-			fmt.Println("XXXXX", string(b))
-			assert.Equal(t, tt.want, storage)
-
-		})
-	}
-}
 
 func TestMakeSD(t *testing.T) {
 	tts := []struct {
@@ -682,7 +496,9 @@ func TestRecursiveClaim(t *testing.T) {
 			},
 			want: want{
 				sdJWT: jwt.MapClaims{
-					"_sd": []any{"xyz"},
+					"_sd": []any{
+						"MDI2OTliMDAxYWQwMWYzZWRjZDdiNWZkNzQ1MTc0MWYzMjg3ZGVmZjY2ODEwNmNjOTFjNDIyZjdmNGUxZGRlYg",
+					},
 				},
 				disclosures: []Disclosure{
 					{
@@ -706,6 +522,9 @@ func TestRecursiveClaim(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.run {
 				t.SkipNow()
+			}
+			newSalt = func() string {
+				return "salt_zyx"
 			}
 			storage := jwt.MapClaims{}
 			disclosures := disclosures{}
