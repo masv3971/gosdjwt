@@ -13,10 +13,10 @@ import (
 // Instruction instructs how to build a SD-JWT
 type Instruction struct {
 	children       []*Instruction
+	sd             bool
 	salt           string
 	value          any
 	name           string
-	sd             bool
 	disclosureHash string
 	claimHash      string
 }
@@ -102,7 +102,6 @@ func (d disclosures) new(dd []string) error {
 		if err := disclosure.parse(v); err != nil {
 			return err
 		}
-		fmt.Println("disclosure", disclosure)
 		d[disclosure.claimHash] = disclosure
 	}
 	return nil
@@ -156,11 +155,6 @@ func (i *Instruction) isArrayValue() bool {
 	return false
 }
 
-func hash(disclosureHash string) string {
-	sha256Encoded := fmt.Sprintf("%x", sha256.Sum256([]byte(disclosureHash)))
-	return base64.RawURLEncoding.EncodeToString([]byte(sha256Encoded))
-}
-
 func (i *Instruction) makeClaimHash() error {
 	if i.disclosureHash == "" {
 		return ErrBase64EncodedEmpty
@@ -175,6 +169,11 @@ func (i *Instruction) makeDisclosureHash() {
 }
 
 type Instructions []*Instruction
+
+func hash(disclosureHash string) string {
+	sha256Encoded := fmt.Sprintf("%x", sha256.Sum256([]byte(disclosureHash)))
+	return base64.RawURLEncoding.EncodeToString([]byte(sha256Encoded))
+}
 
 func addToArray(key string, value any, storage jwt.MapClaims) {
 	claim, ok := storage[key]
