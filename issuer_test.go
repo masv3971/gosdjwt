@@ -5,23 +5,70 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 )
 
+var mockCompleteSDJWT = Instructions{
+	{
+		name:  "_sd_alg",
+		value: "sha-256",
+	},
+	{
+		name:  "sub",
+		value: "test-2",
+	},
+	{
+		name:  "given_name",
+		value: "John",
+		sd:    true,
+	},
+	{
+		name: "address",
+		children: []*Instruction{
+			{
+				name:  "street_address",
+				value: "testgatan 3",
+				sd:    true,
+			},
+			{
+				name:  "country",
+				value: "sweden",
+			},
+		},
+	},
+	{
+		name:  "birthdate",
+		value: "1970-01-01",
+		sd:    true,
+	},
+}
+
+var (
+	mockSDJWTWithGivenNameDisclosure             = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfc2QiOlsiTXpFMFpEVTVOelkwTkdRNFlqUmxaVE0xWWpKallXTXdOR0ZsTm1Nd00ySmlOR0ZtWVRrNU9EUXhNRGhqTXpJek5HUTNaVFkyTm1abU1XSm1Zems0TnciLCJaamM0WVdNME16UTVPREppWTJSaVptSXlOMlJrTkRNd1ptWTVNMlEzTjJGaE9HWXhNelEyWVdRNE9EWXlaR1ZqTVRRNE5qUTJZemN4TTJFME1EVXpaZyJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImFkZHJlc3MiOnsiX3NkIjpbIk5UTXhaR1JsTkdaak9EazBOelJtWkRBMU4yTXlZMlU0TmpkaU1EVTROV0U0WVRVMVpXVXlaalExTVRZd1pURTBNRFpqTkRNek9XUmpZV0l6TWpCaVpnIl0sImNvdW50cnkiOiJzd2VkZW4ifSwic3ViIjoidGVzdC0yIn0.O60CIBHS-AaOOUFgbatYzg9eCLMBvRZ5rDhRuSWjDk8~WyJzYWx0X3p5eCIsImdpdmVuX25hbWUiLCJKb2huIl0~"
+	mockSDJWTWithGivenNameAndBirthdateDisclosure = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfc2QiOlsiTXpFMFpEVTVOelkwTkdRNFlqUmxaVE0xWWpKallXTXdOR0ZsTm1Nd00ySmlOR0ZtWVRrNU9EUXhNRGhqTXpJek5HUTNaVFkyTm1abU1XSm1Zems0TnciLCJaamM0WVdNME16UTVPREppWTJSaVptSXlOMlJrTkRNd1ptWTVNMlEzTjJGaE9HWXhNelEyWVdRNE9EWXlaR1ZqTVRRNE5qUTJZemN4TTJFME1EVXpaZyJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImFkZHJlc3MiOnsiX3NkIjpbIk5UTXhaR1JsTkdaak9EazBOelJtWkRBMU4yTXlZMlU0TmpkaU1EVTROV0U0WVRVMVpXVXlaalExTVRZd1pURTBNRFpqTkRNek9XUmpZV0l6TWpCaVpnIl0sImNvdW50cnkiOiJzd2VkZW4ifSwic3ViIjoidGVzdC0yIn0.O60CIBHS-AaOOUFgbatYzg9eCLMBvRZ5rDhRuSWjDk8~WyJzYWx0X3p5eCIsImdpdmVuX25hbWUiLCJKb2huIl0~WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsIjE5NzAtMDEtMDEiXQ~"
+
+	mockSDJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfc2QiOlsiTXpFMFpEVTVOelkwTkdRNFlqUmxaVE0xWWpKallXTXdOR0ZsTm1Nd00ySmlOR0ZtWVRrNU9EUXhNRGhqTXpJek5HUTNaVFkyTm1abU1XSm1Zems0TnciLCJaamM0WVdNME16UTVPREppWTJSaVptSXlOMlJrTkRNd1ptWTVNMlEzTjJGaE9HWXhNelEyWVdRNE9EWXlaR1ZqTVRRNE5qUTJZemN4TTJFME1EVXpaZyJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImFkZHJlc3MiOnsiX3NkIjpbIk5UTXhaR1JsTkdaak9EazBOelJtWkRBMU4yTXlZMlU0TmpkaU1EVTROV0U0WVRVMVpXVXlaalExTVRZd1pURTBNRFpqTkRNek9XUmpZV0l6TWpCaVpnIl0sImNvdW50cnkiOiJzd2VkZW4ifSwic3ViIjoidGVzdC0yIn0.O60CIBHS-AaOOUFgbatYzg9eCLMBvRZ5rDhRuSWjDk8"
+
+	mockGivenNameDisclosure = "WyJzYWx0X3p5eCIsImdpdmVuX25hbWUiLCJKb2huIl0"
+	mockBirthdayDisclosure  = "WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsIjE5NzAtMDEtMDEiXQ"
+)
+
 func TestMakeSD(t *testing.T) {
 	tts := []struct {
 		name         string
+		description  string
 		run          bool
 		instructions []*Instruction
 		wantSDJWT    jwt.Claims
-		wantDisclose []Disclosure
+		wantDisclose []*Disclosure
 	}{
 		{
-			name: "no children, one _sd",
-			run:  true,
+			name:        "test-1",
+			description: "no children, one _sd",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name:  "birthdate",
@@ -34,7 +81,7 @@ func TestMakeSD(t *testing.T) {
 					"Zjc4YWM0MzQ5ODJiY2RiZmIyN2RkNDMwZmY5M2Q3N2FhOGYxMzQ2YWQ4ODYyZGVjMTQ4NjQ2YzcxM2E0MDUzZg",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "1970-01-01",
@@ -44,8 +91,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "no children, two _sd",
-			run:  true,
+			name:        "test-2",
+			description: "no children, two _sd",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name:  "birthdate",
@@ -64,7 +112,7 @@ func TestMakeSD(t *testing.T) {
 					"YmM1OTExODBmNTBlOGQzYjg4N2YzYTFkNWZkNjhjYWM5NTQ4YjhkMzI4ZjBjY2JmMjg5YTE1ZTY4MTdhYzA3Yw",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "1970-01-01",
@@ -80,8 +128,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "no children, one _sd of two claims",
-			run:  true,
+			name:        "test-3",
+			description: "no children, one _sd of two claims",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name:  "birthdate",
@@ -100,7 +149,7 @@ func TestMakeSD(t *testing.T) {
 				},
 				"email": "test@example.com",
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "1970-01-01",
@@ -110,8 +159,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent one child, one claim, sd all parent",
-			run:  true,
+			name:        "test-4",
+			description: "one parent one child, one claim, sd all parent",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "address",
@@ -129,7 +179,7 @@ func TestMakeSD(t *testing.T) {
 					"NTMxZGRlNGZjODk0NzRmZDA1N2MyY2U4NjdiMDU4NWE4YTU1ZWUyZjQ1MTYwZTE0MDZjNDMzOWRjYWIzMjBiZg",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "testgatan 3",
@@ -139,8 +189,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "two parent one child per, one claim, sd all parent",
-			run:  true,
+			name:        "test-5",
+			description: "two parent one child per, one claim, sd all parent",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "address",
@@ -169,7 +220,7 @@ func TestMakeSD(t *testing.T) {
 					"MDQzMzc4NGFlNzk0MGJjMTU3ZDIxZmFmODE1NmIwYmJlNGNkMTdjYWVkZTAzNjViYzllM2Q2ODZkZTBhZGZlYQ",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "testgatan 3",
@@ -185,8 +236,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one child, one _sd claim, keep parent visible",
-			run:  true,
+			name:        "test-6",
+			description: "one child, one _sd claim, keep parent visible",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "address",
@@ -206,7 +258,7 @@ func TestMakeSD(t *testing.T) {
 					},
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "testgatan 3",
@@ -216,8 +268,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent two children, individual sd for each claim, keep parent visible",
-			run:  true,
+			name:        "test-7",
+			description: "one parent two children, individual sd for each claim, keep parent visible",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "address",
@@ -243,7 +296,7 @@ func TestMakeSD(t *testing.T) {
 					},
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "testgatan 3",
@@ -259,8 +312,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent two children, one sd claim, keep parent visible",
-			run:  true,
+			name:        "test-8",
+			description: "one parent two children, one sd claim, keep parent visible",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "address",
@@ -286,7 +340,7 @@ func TestMakeSD(t *testing.T) {
 					"country": "sweden",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "zyx",
 					value:          "testgatan 3",
@@ -296,8 +350,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent with two array-like children claims with sd claim for each child, keep parent visible",
-			run:  true,
+			name:        "test-9",
+			description: "one parent with two array-like children claims with sd claim for each child, keep parent visible",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "nationalities",
@@ -323,7 +378,7 @@ func TestMakeSD(t *testing.T) {
 					},
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "se",
@@ -337,8 +392,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent with two array-like children claims with one sd claim for one child",
-			run:  true,
+			name:        "test-10",
+			description: "one parent with two array-like children claims with one sd claim for one child",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "nationalities",
@@ -362,7 +418,7 @@ func TestMakeSD(t *testing.T) {
 					"uk",
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "se",
@@ -371,8 +427,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one parent with two array-like children claims with one sd claim for one child, reverse order",
-			run:  true,
+			name:        "test-11",
+			description: "one parent with two array-like children claims with one sd claim for one child, reverse order",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name: "nationalities",
@@ -396,7 +453,7 @@ func TestMakeSD(t *testing.T) {
 					},
 				},
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					value:          "uk",
@@ -405,8 +462,9 @@ func TestMakeSD(t *testing.T) {
 			},
 		},
 		{
-			name: "one sd claim and one non-sd claim",
-			run:  true,
+			name:        "test-12",
+			description: "one sd claim and one non-sd claim",
+			run:         true,
 			instructions: []*Instruction{
 				{
 					name:  "birthdate",
@@ -424,7 +482,7 @@ func TestMakeSD(t *testing.T) {
 				},
 				"first_name": "test",
 			},
-			wantDisclose: []Disclosure{
+			wantDisclose: []*Disclosure{
 				{
 					salt:           "salt_zyx",
 					name:           "birthdate",
@@ -528,7 +586,8 @@ func TestRecursiveClaim(t *testing.T) {
 			}
 			storage := jwt.MapClaims{}
 			disclosures := disclosures{}
-			makeSD(jwt.MapClaims{}, "", false, tt.instructions, storage, disclosures)
+			err := makeSD(jwt.MapClaims{}, "", false, tt.instructions, storage, disclosures)
+			assert.NoError(t, err)
 
 			opts := cmp.Options{
 				cmp.AllowUnexported(Disclosure{}),
@@ -556,7 +615,7 @@ func TestDisclosuresString(t *testing.T) {
 			name: "one disclosure",
 			run:  true,
 			have: disclosures{
-				"birthdate": Disclosure{
+				"birthdate": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
@@ -568,12 +627,12 @@ func TestDisclosuresString(t *testing.T) {
 			name: "two disclosure",
 			run:  true,
 			have: disclosures{
-				"birthdate": Disclosure{
+				"birthdate": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
 				},
-				"givename": Disclosure{
+				"givename": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
@@ -595,19 +654,19 @@ func TestDisclosuresArray(t *testing.T) {
 		name string
 		run  bool
 		have disclosures
-		want []Disclosure
+		want []*Disclosure
 	}{
 		{
 			name: "one disclosure",
 			run:  true,
 			have: disclosures{
-				"birthdate": Disclosure{
+				"birthdate": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
 				},
 			},
-			want: []Disclosure{
+			want: []*Disclosure{
 				{
 					salt:           "zyx",
 					value:          "xyz",
@@ -619,18 +678,18 @@ func TestDisclosuresArray(t *testing.T) {
 			name: "two disclosure",
 			run:  true,
 			have: disclosures{
-				"birthdate": Disclosure{
+				"birthdate": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
 				},
-				"givename": Disclosure{
+				"givename": &Disclosure{
 					salt:           "zyx",
 					value:          "xyz",
 					disclosureHash: "xyz",
 				},
 			},
-			want: []Disclosure{
+			want: []*Disclosure{
 				{
 					salt:           "zyx",
 					value:          "xyz",
@@ -725,6 +784,181 @@ func TestSHA256Hash(t *testing.T) {
 			assert.NoError(t, err)
 			fmt.Println("claimHash", tt.have.claimHash)
 			assert.Equal(t, tt.want, tt.have.claimHash)
+		})
+	}
+}
+
+func TestSDJWT(t *testing.T) {
+	type want struct {
+		claims      jwt.MapClaims
+		disclosures []*Disclosure
+	}
+	tts := []struct {
+		name string
+		run  bool
+		have Instructions
+		want want
+	}{
+		{
+			name: "one sd claim",
+			run:  true,
+			have: mockCompleteSDJWT,
+			want: want{
+				claims: jwt.MapClaims{
+					"_sd_alg": "sha-256",
+					"sub":     "test-2",
+					"address": jwt.MapClaims{
+						"_sd": []any{
+							"NTMxZGRlNGZjODk0NzRmZDA1N2MyY2U4NjdiMDU4NWE4YTU1ZWUyZjQ1MTYwZTE0MDZjNDMzOWRjYWIzMjBiZg",
+						},
+						"country": "sweden",
+					},
+					"_sd": []any{
+						"MzE0ZDU5NzY0NGQ4YjRlZTM1YjJjYWMwNGFlNmMwM2JiNGFmYTk5ODQxMDhjMzIzNGQ3ZTY2NmZmMWJmYzk4Nw",
+						"Zjc4YWM0MzQ5ODJiY2RiZmIyN2RkNDMwZmY5M2Q3N2FhOGYxMzQ2YWQ4ODYyZGVjMTQ4NjQ2YzcxM2E0MDUzZg",
+					},
+				},
+				disclosures: []*Disclosure{
+					{
+						salt:           "salt_zyx",
+						value:          "John",
+						name:           "given_name",
+						disclosureHash: "WyJzYWx0X3p5eCIsImdpdmVuX25hbWUiLCJKb2huIl0",
+					},
+					{
+						salt:           "salt_zyx",
+						value:          "testgatan 3",
+						name:           "street_address",
+						disclosureHash: "WyJzYWx0X3p5eCIsInN0cmVldF9hZGRyZXNzIiwidGVzdGdhdGFuIDMiXQ",
+					},
+					{
+						salt:           "salt_zyx",
+						value:          "1970-01-01",
+						name:           "birthdate",
+						disclosureHash: "WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsIjE5NzAtMDEtMDEiXQ",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.run {
+				t.SkipNow()
+			}
+			newSalt = func() string {
+				return "salt_zyx"
+			}
+			gotClaims, disclosures, err := tt.have.sdJWT()
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.want.claims, gotClaims)
+
+			assert.Equal(t, tt.want.disclosures, disclosures.makeArray())
+
+		})
+	}
+}
+
+func TestJWTStringFormatted(t *testing.T) {
+	tts := []struct {
+		name string
+		run  bool
+		have Instructions
+		want string
+	}{
+		{
+			name: "one sd claim",
+			run:  true,
+			have: mockCompleteSDJWT,
+			want: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfc2QiOlsiTXpFMFpEVTVOelkwTkdRNFlqUmxaVE0xWWpKallXTXdOR0ZsTm1Nd00ySmlOR0ZtWVRrNU9EUXhNRGhqTXpJek5HUTNaVFkyTm1abU1XSm1Zems0TnciLCJaamM0WVdNME16UTVPREppWTJSaVptSXlOMlJrTkRNd1ptWTVNMlEzTjJGaE9HWXhNelEyWVdRNE9EWXlaR1ZqTVRRNE5qUTJZemN4TTJFME1EVXpaZyJdLCJfc2RfYWxnIjoic2hhLTI1NiIsImFkZHJlc3MiOnsiX3NkIjpbIk5UTXhaR1JsTkdaak9EazBOelJtWkRBMU4yTXlZMlU0TmpkaU1EVTROV0U0WVRVMVpXVXlaalExTVRZd1pURTBNRFpqTkRNek9XUmpZV0l6TWpCaVpnIl0sImNvdW50cnkiOiJzd2VkZW4ifSwic3ViIjoidGVzdC0yIn0.O60CIBHS-AaOOUFgbatYzg9eCLMBvRZ5rDhRuSWjDk8~WyJzYWx0X3p5eCIsImdpdmVuX25hbWUiLCJKb2huIl0~WyJzYWx0X3p5eCIsInN0cmVldF9hZGRyZXNzIiwidGVzdGdhdGFuIDMiXQ~WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsIjE5NzAtMDEtMDEiXQ~",
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			if !tt.run {
+				t.SkipNow()
+			}
+			newSalt = func() string {
+				return "salt_zyx"
+			}
+			got, err := tt.have.SDJWT("mura")
+			assert.NoError(t, err)
+			fmt.Println("got", got)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDisclosureParse(t *testing.T) {
+	tts := []struct {
+		name string
+		have string
+		want *Disclosure
+	}{
+		{
+			name: "test 1",
+			have: mockBirthdayDisclosure,
+			want: &Disclosure{
+				salt:           "salt_zyx",
+				name:           "birthdate",
+				value:          "1970-01-01",
+				disclosureHash: mockBirthdayDisclosure,
+				claimHash:      "Zjc4YWM0MzQ5ODJiY2RiZmIyN2RkNDMwZmY5M2Q3N2FhOGYxMzQ2YWQ4ODYyZGVjMTQ4NjQ2YzcxM2E0MDUzZg",
+			},
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			disclosure := &Disclosure{}
+			err := disclosure.parse(tt.have)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, disclosure)
+		})
+	}
+
+}
+
+func TestDisclosuresNew(t *testing.T) {
+	tts := []struct {
+		name string
+		have []string
+		want disclosures
+	}{
+		{
+			name: "test 1",
+			have: []string{
+				mockBirthdayDisclosure,
+				mockGivenNameDisclosure,
+			},
+			want: disclosures{
+				"Zjc4YWM0MzQ5ODJiY2RiZmIyN2RkNDMwZmY5M2Q3N2FhOGYxMzQ2YWQ4ODYyZGVjMTQ4NjQ2YzcxM2E0MDUzZg": &Disclosure{
+					salt:           "salt_zyx",
+					name:           "birthdate",
+					value:          "1970-01-01",
+					disclosureHash: mockBirthdayDisclosure,
+					claimHash:      "Zjc4YWM0MzQ5ODJiY2RiZmIyN2RkNDMwZmY5M2Q3N2FhOGYxMzQ2YWQ4ODYyZGVjMTQ4NjQ2YzcxM2E0MDUzZg",
+				},
+				"MzE0ZDU5NzY0NGQ4YjRlZTM1YjJjYWMwNGFlNmMwM2JiNGFmYTk5ODQxMDhjMzIzNGQ3ZTY2NmZmMWJmYzk4Nw": &Disclosure{
+					salt:           "salt_zyx",
+					name:           "given_name",
+					value:          "John",
+					disclosureHash: mockGivenNameDisclosure,
+					claimHash:      "MzE0ZDU5NzY0NGQ4YjRlZTM1YjJjYWMwNGFlNmMwM2JiNGFmYTk5ODQxMDhjMzIzNGQ3ZTY2NmZmMWJmYzk4Nw",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			disclosures := disclosures{}
+			err := disclosures.new(tt.have)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, disclosures)
 		})
 	}
 }

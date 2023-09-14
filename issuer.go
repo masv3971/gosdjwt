@@ -3,10 +3,10 @@ package gosdjwt
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
+	"strings"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -27,9 +27,10 @@ type Disclosure struct {
 	value          any
 	name           string
 	disclosureHash string
+	claimHash      string
 }
 
-type disclosures map[string]Disclosure
+type disclosures map[string]*Disclosure
 
 var (
 	newSalt = func() string {
@@ -42,7 +43,7 @@ func newUUID() string {
 }
 
 func (d disclosures) add(i *Instruction) {
-	d[newUUID()] = Disclosure{
+	d[newUUID()] = &Disclosure{
 		salt:           i.salt,
 		value:          i.value,
 		name:           i.name,
@@ -51,7 +52,7 @@ func (d disclosures) add(i *Instruction) {
 }
 
 func (d disclosures) addValue(i *Instruction, parentName string) {
-	d[newUUID()] = Disclosure{
+	d[newUUID()] = &Disclosure{
 		salt:           i.salt,
 		value:          i.value,
 		disclosureHash: i.disclosureHash,
@@ -61,7 +62,7 @@ func (d disclosures) addValue(i *Instruction, parentName string) {
 func (d disclosures) addAllChildren(i *Instruction) {
 	for _, v := range i.children {
 		random := newUUID()
-		d[random] = Disclosure{
+		d[random] = &Disclosure{
 			salt:           i.salt,
 			value:          v.value,
 			disclosureHash: i.disclosureHash,
@@ -70,7 +71,7 @@ func (d disclosures) addAllChildren(i *Instruction) {
 }
 
 func (d disclosures) addParent(i *Instruction, parentName string) {
-	d[newUUID()] = Disclosure{
+	d[newUUID()] = &Disclosure{
 		salt:           i.salt,
 		value:          i.value,
 		name:           parentName,
@@ -86,13 +87,59 @@ func (d disclosures) string() string {
 	return s
 }
 
-func (d disclosures) makeArray() []Disclosure {
-	a := []Disclosure{}
+func (d disclosures) makeArray() []*Disclosure {
+	a := []*Disclosure{}
 	for _, v := range d {
 		fmt.Println("v", v)
 		a = append(a, v)
 	}
 	return a
+}
+
+func (d disclosures) new(dd []string) error {
+	for _, v := range dd {
+		disclosure := &Disclosure{}
+		if err := disclosure.parse(v); err != nil {
+			return err
+		}
+		fmt.Println("disclosure", disclosure)
+		d[disclosure.claimHash] = disclosure
+	}
+	return nil
+}
+
+func (d disclosures) get(key string) (*Disclosure, bool) {
+	v, ok := d[key]
+	return v, ok
+}
+
+func (d *Disclosure) makeClaimHash() {
+	d.claimHash = hash(d.disclosureHash)
+}
+
+func (d *Disclosure) parse(s string) error {
+	decoded, err := base64.RawStdEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	d.disclosureHash = s
+
+	k, _ := strings.CutPrefix(string(decoded), "[")
+	k, _ = strings.CutSuffix(k, "]")
+
+	for i, v := range strings.Split(k, ",") {
+		v = strings.Trim(v, "\"")
+		switch i {
+		case 0:
+			d.salt = v
+		case 1:
+			d.name = v
+		case 2:
+			d.value = v
+		}
+	}
+	d.makeClaimHash()
+	return nil
 }
 
 func (i *Instruction) hasChildren() bool {
@@ -109,12 +156,16 @@ func (i *Instruction) isArrayValue() bool {
 	return false
 }
 
+func hash(disclosureHash string) string {
+	sha256Encoded := fmt.Sprintf("%x", sha256.Sum256([]byte(disclosureHash)))
+	return base64.RawURLEncoding.EncodeToString([]byte(sha256Encoded))
+}
+
 func (i *Instruction) makeClaimHash() error {
 	if i.disclosureHash == "" {
-		return errors.New("base64Encoded is empty")
+		return ErrBase64EncodedEmpty
 	}
-	sha256Encoded := fmt.Sprintf("%x", sha256.Sum256([]byte(i.disclosureHash)))
-	i.claimHash = base64.RawURLEncoding.EncodeToString([]byte(sha256Encoded))
+	i.claimHash = hash(i.disclosureHash)
 	return nil
 }
 
@@ -123,7 +174,7 @@ func (i *Instruction) makeDisclosureHash() {
 	i.disclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
 }
 
-type instructions []*Instruction
+type Instructions []*Instruction
 
 func addToArray(key string, value any, storage jwt.MapClaims) {
 	claim, ok := storage[key]
@@ -179,7 +230,7 @@ func (i *Instruction) addChildrenToParentValue(storage jwt.MapClaims) error {
 	return nil
 }
 
-func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instructions instructions, storage jwt.MapClaims, disclosures disclosures) error {
+func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instructions Instructions, storage jwt.MapClaims, disclosures disclosures) error {
 	for _, v := range instructions {
 		v.salt = newSalt()
 		if v.sd || parentSD {
@@ -241,4 +292,33 @@ func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instr
 	fmt.Println("storage", storage)
 	fmt.Println("disclosures", disclosures)
 	return nil
+}
+
+func (i Instructions) sdJWT() (jwt.MapClaims, disclosures, error) {
+	storage := jwt.MapClaims{}
+	disclosures := disclosures{}
+	if err := makeSD(nil, "", false, i, storage, disclosures); err != nil {
+		return nil, nil, err
+	}
+	return storage, disclosures, nil
+}
+
+func sign(claims jwt.MapClaims, signingKey string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(signingKey))
+}
+
+// SDJWT returns a signed SD-JWT with disclosures
+// Maybe this should return a more structured return of jwt and disclosures
+func (i Instructions) SDJWT(signingKey string) (string, error) {
+	rawSDJWT, disclosures, err := i.sdJWT()
+	if err != nil {
+		return "", err
+	}
+	signedJWT, err := sign(rawSDJWT, signingKey)
+	if err != nil {
+		return "", err
+	}
+	sdjwt := fmt.Sprintf("%s%s", signedJWT, disclosures.string())
+	return sdjwt, nil
 }
