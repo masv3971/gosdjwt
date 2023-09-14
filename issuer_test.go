@@ -56,6 +56,11 @@ var (
 	mockBirthdayDisclosure  = "WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsIjE5NzAtMDEtMDEiXQ"
 )
 
+func TestNewSalt(t *testing.T) {
+	got := newSalt()
+	assert.NotEmpty(t, got)
+}
+
 func TestMakeSD(t *testing.T) {
 	tts := []struct {
 		name         string

@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"go.step.sm/crypto/randutil"
 )
 
 // Instruction instructs how to build a SD-JWT
@@ -34,7 +35,8 @@ type disclosures map[string]*Disclosure
 
 var (
 	newSalt = func() string {
-		return uuid.NewString()
+		r, _ := randutil.ASCII(17)
+		return base64.RawURLEncoding.EncodeToString([]byte(r))
 	}
 )
 
