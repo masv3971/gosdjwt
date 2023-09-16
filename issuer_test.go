@@ -1,6 +1,7 @@
 package gosdjwt
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"testing"
@@ -13,36 +14,36 @@ import (
 
 var mockCompleteSDJWT = Instructions{
 	{
-		name:  "_sd_alg",
-		value: "sha-256",
+		Name:  "_sd_alg",
+		Value: "sha-256",
 	},
 	{
-		name:  "sub",
-		value: "test-2",
+		Name:  "sub",
+		Value: "test-2",
 	},
 	{
-		name:  "given_name",
-		value: "John",
-		sd:    true,
+		Name:  "given_name",
+		Value: "John",
+		SD:    true,
 	},
 	{
-		name: "address",
-		children: []*Instruction{
+		Name: "address",
+		Children: []*Instruction{
 			{
-				name:  "street_address",
-				value: "testgatan 3",
-				sd:    true,
+				Name:  "street_address",
+				Value: "testgatan 3",
+				SD:    true,
 			},
 			{
-				name:  "country",
-				value: "sweden",
+				Name:  "country",
+				Value: "sweden",
 			},
 		},
 	},
 	{
-		name:  "birthdate",
-		value: "1970-01-01",
-		sd:    true,
+		Name:  "birthdate",
+		Value: "1970-01-01",
+		SD:    true,
 	},
 }
 
@@ -76,9 +77,9 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
+					Name:  "birthdate",
+					Value: "1970-01-01",
+					SD:    true,
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -101,14 +102,14 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
+					Name:  "birthdate",
+					Value: "1970-01-01",
+					SD:    true,
 				},
 				{
-					name:  "email",
-					value: "test@example.com",
-					sd:    true,
+					Name:  "email",
+					Value: "test@example.com",
+					SD:    true,
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -138,14 +139,14 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
+					Name:  "birthdate",
+					Value: "1970-01-01",
+					SD:    true,
 				},
 				{
-					name:  "email",
-					value: "test@example.com",
-					sd:    false,
+					Name:  "email",
+					Value: "test@example.com",
+					SD:    false,
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -169,14 +170,14 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					children: []*Instruction{
+					Name: "address",
+					Children: []*Instruction{
 						{
-							name:  "street_address",
-							value: "testgatan 3",
+							Name:  "street_address",
+							Value: "testgatan 3",
 						},
 					},
-					sd: true,
+					SD: true,
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -199,24 +200,24 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					children: []*Instruction{
+					Name: "address",
+					Children: []*Instruction{
 						{
-							name:  "street_address",
-							value: "testgatan 3",
+							Name:  "street_address",
+							Value: "testgatan 3",
 						},
 					},
-					sd: true,
+					SD: true,
 				},
 				{
-					name: "name",
-					children: []*Instruction{
+					Name: "name",
+					Children: []*Instruction{
 						{
-							name:  "given_name",
-							value: "test",
+							Name:  "given_name",
+							Value: "test",
 						},
 					},
-					sd: true,
+					SD: true,
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -246,12 +247,12 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					children: []*Instruction{
+					Name: "address",
+					Children: []*Instruction{
 						{
-							name:  "street_address",
-							value: "testgatan 3",
-							sd:    true,
+							Name:  "street_address",
+							Value: "testgatan 3",
+							SD:    true,
 						},
 					},
 				},
@@ -278,17 +279,17 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					children: []*Instruction{
+					Name: "address",
+					Children: []*Instruction{
 						{
-							name:  "street_address",
-							value: "testgatan 3",
-							sd:    true,
+							Name:  "street_address",
+							Value: "testgatan 3",
+							SD:    true,
 						},
 						{
-							name:  "country",
-							value: "sweden",
-							sd:    true,
+							Name:  "country",
+							Value: "sweden",
+							SD:    true,
 						},
 					},
 				},
@@ -322,17 +323,17 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					children: []*Instruction{
+					Name: "address",
+					Children: []*Instruction{
 						{
-							name:  "street_address",
-							value: "testgatan 3",
-							sd:    true,
+							Name:  "street_address",
+							Value: "testgatan 3",
+							SD:    true,
 						},
 						{
-							name:  "country",
-							value: "sweden",
-							sd:    false,
+							Name:  "country",
+							Value: "sweden",
+							SD:    false,
 						},
 					},
 				},
@@ -360,15 +361,15 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "nationalities",
-					children: []*Instruction{
+					Name: "nationalities",
+					Children: []*Instruction{
 						{
-							value: "se",
-							sd:    true,
+							Value: "se",
+							SD:    true,
 						},
 						{
-							value: "uk",
-							sd:    true,
+							Value: "uk",
+							SD:    true,
 						},
 					},
 				},
@@ -402,15 +403,15 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "nationalities",
-					children: []*Instruction{
+					Name: "nationalities",
+					Children: []*Instruction{
 						{
-							value: "se",
-							sd:    true,
+							Value: "se",
+							SD:    true,
 						},
 						{
-							value: "uk",
-							sd:    false,
+							Value: "uk",
+							SD:    false,
 						},
 					},
 				},
@@ -437,15 +438,15 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name: "nationalities",
-					children: []*Instruction{
+					Name: "nationalities",
+					Children: []*Instruction{
 						{
-							value: "se",
-							sd:    false,
+							Value: "se",
+							SD:    false,
 						},
 						{
-							value: "uk",
-							sd:    true,
+							Value: "uk",
+							SD:    true,
 						},
 					},
 				},
@@ -472,13 +473,13 @@ func TestMakeSD(t *testing.T) {
 			run:         true,
 			instructions: []*Instruction{
 				{
-					name:  "birthdate",
-					value: "1970-01-01",
-					sd:    true,
+					Name:  "birthdate",
+					Value: "1970-01-01",
+					SD:    true,
 				},
 				{
-					name:  "first_name",
-					value: "test",
+					Name:  "first_name",
+					Value: "test",
 				},
 			},
 			wantSDJWT: jwt.MapClaims{
@@ -508,7 +509,7 @@ func TestMakeSD(t *testing.T) {
 			}
 			storage := jwt.MapClaims{}
 			disclosures := disclosures{}
-			err := makeSD(jwt.MapClaims{}, "", false, tt.instructions, storage, disclosures)
+			err := makeSD("", false, tt.instructions, storage, disclosures)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.wantSDJWT, storage)
 
@@ -541,18 +542,18 @@ func TestRecursiveClaim(t *testing.T) {
 			run:  true,
 			instructions: []*Instruction{
 				{
-					name: "address",
-					sd:   true,
-					children: []*Instruction{
+					Name: "address",
+					SD:   true,
+					Children: []*Instruction{
 						{
-							name:  "street",
-							value: "testgatan 3",
-							sd:    true,
+							Name:  "street",
+							Value: "testgatan 3",
+							SD:    true,
 						},
 						{
-							name:  "location",
-							value: "skaraborg",
-							sd:    true,
+							Name:  "location",
+							Value: "skaraborg",
+							SD:    true,
 						},
 					},
 				},
@@ -591,7 +592,7 @@ func TestRecursiveClaim(t *testing.T) {
 			}
 			storage := jwt.MapClaims{}
 			disclosures := disclosures{}
-			err := makeSD(jwt.MapClaims{}, "", false, tt.instructions, storage, disclosures)
+			err := makeSD("", false, tt.instructions, storage, disclosures)
 			assert.NoError(t, err)
 
 			opts := cmp.Options{
@@ -734,9 +735,9 @@ func TestBase64Encode(t *testing.T) {
 			name: "string value in instruction",
 			run:  true,
 			have: Instruction{
-				salt:  "salt_zyx",
-				value: "xyz",
-				name:  "birthdate",
+				Salt:  "salt_zyx",
+				Value: "xyz",
+				Name:  "birthdate",
 			},
 			want: want{
 				s: "WyJzYWx0X3p5eCIsImJpcnRoZGF0ZSIsInh5eiJd",
@@ -751,9 +752,9 @@ func TestBase64Encode(t *testing.T) {
 				t.SkipNow()
 			}
 			tt.have.makeDisclosureHash()
-			assert.Equal(t, tt.want.s, tt.have.disclosureHash)
+			assert.Equal(t, tt.want.s, tt.have.DisclosureHash)
 
-			gotDecoded, err := base64.RawStdEncoding.DecodeString(tt.have.disclosureHash)
+			gotDecoded, err := base64.RawStdEncoding.DecodeString(tt.have.DisclosureHash)
 			assert.NoError(t, err)
 			fmt.Println("gotDecoded", string(gotDecoded))
 			assert.Equal(t, tt.want.a, string(gotDecoded))
@@ -772,10 +773,10 @@ func TestSHA256Hash(t *testing.T) {
 			name: "first",
 			run:  true,
 			have: &Instruction{
-				salt:           "zyx",
-				value:          "xyz",
-				name:           "birthdate",
-				disclosureHash: "WyJ6eXgiLCJiaXJ0aGRhdGUiLCJ4eXoiXQ==",
+				Salt:           "zyx",
+				Value:          "xyz",
+				Name:           "birthdate",
+				DisclosureHash: "WyJ6eXgiLCJiaXJ0aGRhdGUiLCJ4eXoiXQ==",
 			},
 			want: "ZWFjZjU3ZjllYTA0ZDllZTY5NDFjMTBlY2NlMzM0YjY0ZTAwNDdiNDFjNTdmYWVhYWIzYmNlMTQ3YTNkZjk4Nw",
 		},
@@ -787,8 +788,55 @@ func TestSHA256Hash(t *testing.T) {
 			}
 			err := tt.have.makeClaimHash()
 			assert.NoError(t, err)
-			fmt.Println("claimHash", tt.have.claimHash)
-			assert.Equal(t, tt.want, tt.have.claimHash)
+			fmt.Println("claimHash", tt.have.ClaimHash)
+			assert.Equal(t, tt.want, tt.have.ClaimHash)
+		})
+	}
+}
+
+func TestInstructionsAdd(t *testing.T) {
+	type have struct {
+		a Instructions
+		b Instructions
+	}
+	tts := []struct {
+		name string
+		have have
+		want Instructions
+	}{
+		{
+			name: "test-1",
+			have: have{
+				a: []*Instruction{
+					{
+						Name:  "birthdate",
+						Value: "1970-01-01",
+					},
+				},
+				b: []*Instruction{
+					{
+						Name:  "given_name",
+						Value: "John",
+					},
+				},
+			},
+			want: []*Instruction{
+				{
+					Name:  "birthdate",
+					Value: "1970-01-01",
+				},
+				{
+					Name:  "given_name",
+					Value: "John",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CombineInstructionsSets(tt.have.a, tt.have.b)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -855,6 +903,7 @@ func TestSDJWT(t *testing.T) {
 			newSalt = func() string {
 				return "salt_zyx"
 			}
+			//client, err := New(context.TODO(), Config{})
 			gotClaims, disclosures, err := tt.have.sdJWT()
 			assert.NoError(t, err)
 
@@ -889,7 +938,8 @@ func TestJWTStringFormatted(t *testing.T) {
 			newSalt = func() string {
 				return "salt_zyx"
 			}
-			got, err := tt.have.SDJWT("mura")
+			client, err := New(context.TODO(), Config{})
+			got, err := client.SDJWT(tt.have, "mura")
 			assert.NoError(t, err)
 			fmt.Println("got", got)
 			assert.Equal(t, tt.want, got)

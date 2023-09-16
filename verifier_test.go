@@ -164,7 +164,6 @@ func TestRun(t *testing.T) {
 			got := run(tt.have.claims, tt.have.disclosures)
 			b, _ := json.Marshal(got)
 			fmt.Println("JSON: ", string(b))
-			//assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
 	}

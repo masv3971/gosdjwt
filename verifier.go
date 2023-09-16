@@ -33,7 +33,7 @@ func splitSDJWT(sdjwt string) StandardPresentation {
 func parseJWTAndValidate(sdjwt, key string) (jwt.MapClaims, *Validation, error) {
 	c := jwt.MapClaims{}
 	validation := &Validation{
-		SignaturePolicy: SignaturePolicyPassed,
+		SignaturePolicy: SignaturePolicyPassed, // TODO(masv): Fix this
 	}
 
 	token, err := jwt.ParseWithClaims(sdjwt, c, func(token *jwt.Token) (interface{}, error) {
@@ -113,6 +113,7 @@ type Validation struct {
 	SignaturePolicy string
 }
 
+// Verify verifies the SDJWT and returns the claims and the validation
 func Verify(sdjwt, key string) (jwt.MapClaims, *Validation, error) {
 	sd := splitSDJWT(sdjwt)
 

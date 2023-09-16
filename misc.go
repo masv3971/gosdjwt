@@ -1,6 +1,8 @@
 package gosdjwt
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	// ErrTokenNotValid is returned when the JWT token is not valid

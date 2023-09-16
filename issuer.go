@@ -13,13 +13,21 @@ import (
 
 // Instruction instructs how to build a SD-JWT
 type Instruction struct {
-	children       []*Instruction
-	sd             bool
-	salt           string
-	value          any
-	name           string
-	disclosureHash string
-	claimHash      string
+	Children       []*Instruction `json:"children,omitempty" yaml:"children,omitempty"`
+	SD             bool           `json:"sd,omitempty" yaml:"sd,omitempty"`
+	Salt           string         `json:"salt,omitempty" yaml:"salt,omitempty"`
+	Value          any            `json:"value,omitempty" yaml:"value,omitempty"`
+	Name           string         `json:"name,omitempty" yaml:"name,omitempty"`
+	DisclosureHash string         `json:"disclosure_hash,omitempty" yaml:"disclosure_hash,omitempty"`
+	ClaimHash      string         `json:"claim_hash,omitempty" yaml:"claim_hash,omitempty"`
+}
+
+// DefaultClaims holds the default claims
+type DefaultClaims struct {
+	IAT int64  `json:"iat" default:"0"`
+	EXP int64  `json:"exp"`
+	NBF int64  `json:"nbf"`
+	ISS string `json:"iss"`
 }
 
 // Disclosure keeps a disclosure
@@ -46,42 +54,45 @@ func newUUID() string {
 
 func (d disclosures) add(i *Instruction) {
 	d[newUUID()] = &Disclosure{
-		salt:           i.salt,
-		value:          i.value,
-		name:           i.name,
-		disclosureHash: i.disclosureHash,
+		salt:           i.Salt,
+		value:          i.Value,
+		name:           i.Name,
+		disclosureHash: i.DisclosureHash,
 	}
 }
 
 func (d disclosures) addValue(i *Instruction, parentName string) {
 	d[newUUID()] = &Disclosure{
-		salt:           i.salt,
-		value:          i.value,
-		disclosureHash: i.disclosureHash,
+		salt:           i.Salt,
+		value:          i.Value,
+		disclosureHash: i.DisclosureHash,
 	}
 }
 
 func (d disclosures) addAllChildren(i *Instruction) {
-	for _, v := range i.children {
+	for _, v := range i.Children {
 		random := newUUID()
 		d[random] = &Disclosure{
-			salt:           i.salt,
-			value:          v.value,
-			disclosureHash: i.disclosureHash,
+			salt:           i.Salt,
+			value:          v.Value,
+			disclosureHash: i.DisclosureHash,
 		}
 	}
 }
 
 func (d disclosures) addParent(i *Instruction, parentName string) {
 	d[newUUID()] = &Disclosure{
-		salt:           i.salt,
-		value:          i.value,
+		salt:           i.Salt,
+		value:          i.Value,
 		name:           parentName,
-		disclosureHash: i.disclosureHash,
+		disclosureHash: i.DisclosureHash,
 	}
 }
 
 func (d disclosures) string() string {
+	if len(d) == 0 {
+		return ""
+	}
 	s := "~"
 	for _, v := range d {
 		s += fmt.Sprintf("%s~", v.disclosureHash)
@@ -144,13 +155,13 @@ func (d *Disclosure) parse(s string) error {
 }
 
 func (i *Instruction) hasChildren() bool {
-	return i.children != nil
+	return i.Children != nil
 }
 
 // isArrayValue returns true if the instruction lacks a name but has a value
 func (i *Instruction) isArrayValue() bool {
-	if i.name == "" {
-		if i.value != nil {
+	if i.Name == "" {
+		if i.Value != nil {
 			return true
 		}
 	}
@@ -158,16 +169,16 @@ func (i *Instruction) isArrayValue() bool {
 }
 
 func (i *Instruction) makeClaimHash() error {
-	if i.disclosureHash == "" {
+	if i.DisclosureHash == "" {
 		return ErrBase64EncodedEmpty
 	}
-	i.claimHash = hash(i.disclosureHash)
+	i.ClaimHash = hash(i.DisclosureHash)
 	return nil
 }
 
 func (i *Instruction) makeDisclosureHash() {
-	s := fmt.Sprintf("[%q,%q,%q]", i.salt, i.name, i.value)
-	i.disclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
+	s := fmt.Sprintf("[%q,%q,%q]", i.Salt, i.Name, i.Value)
+	i.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
 }
 
 type Instructions []*Instruction
@@ -210,16 +221,16 @@ func addToMap(parentName, childName string, value any, storage jwt.MapClaims) {
 
 func (i Instruction) collectAllChildClaims() error {
 	t := jwt.MapClaims{}
-	for _, v := range i.children {
+	for _, v := range i.Children {
 		v.makeDisclosureHash()
 		if err := v.makeClaimHash(); err != nil {
 			return err
 		}
 		if !v.hasChildren() {
-			t[v.name] = v.value
+			t[v.Name] = v.Value
 		}
 	}
-	i.value = t
+	i.Value = t
 	return nil
 }
 
@@ -227,29 +238,29 @@ func (i *Instruction) addChildrenToParentValue(storage jwt.MapClaims) error {
 	if err := i.collectAllChildClaims(); err != nil {
 		return err
 	}
-	addToArray("_sd", i.claimHash, storage)
+	addToArray("_sd", i.ClaimHash, storage)
 	return nil
 }
 
-func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instructions Instructions, storage jwt.MapClaims, disclosures disclosures) error {
+func makeSD(parentName string, parentSD bool, instructions Instructions, storage jwt.MapClaims, disclosures disclosures) error {
 	for _, v := range instructions {
-		v.salt = newSalt()
-		if v.sd || parentSD {
+		v.Salt = newSalt()
+		if v.SD || parentSD {
 			v.makeDisclosureHash()
 			if err := v.makeClaimHash(); err != nil {
 				return err
 			}
 		}
 		if v.hasChildren() {
-			makeSD(parentStorage, v.name, v.sd, v.children, storage, disclosures)
+			makeSD(v.Name, v.SD, v.Children, storage, disclosures)
 		} else {
 			if parentName == "" {
-				if v.sd {
-					fmt.Println("sd no parent", v.name)
+				if v.SD {
+					fmt.Println("sd no parent", v.Name)
 					disclosures.add(v)
-					addToArray("_sd", v.claimHash, storage)
+					addToArray("_sd", v.ClaimHash, storage)
 				} else {
-					storage[v.name] = v.value
+					storage[v.Name] = v.Value
 				}
 			} else {
 				if parentSD {
@@ -258,31 +269,31 @@ func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instr
 						return err
 					}
 					disclosures.addParent(v, parentName)
-					fmt.Println("parent is sd", v.value)
-					if v.sd {
+					fmt.Println("parent is sd", v.Value)
+					if v.SD {
 						fmt.Println("recursive sd")
 						disclosures.addAllChildren(v)
 						break
 					}
 				} else {
-					if v.sd {
+					if v.SD {
 						if v.isArrayValue() {
 							fmt.Println("Array-like sd")
-							addToArray(parentName, jwt.MapClaims{"...": v.claimHash}, storage)
+							addToArray(parentName, jwt.MapClaims{"...": v.ClaimHash}, storage)
 							disclosures.addValue(v, parentName)
 						} else {
 							fmt.Println("sd child")
-							addToClaimSD(parentName, "_sd", v.claimHash, storage)
+							addToClaimSD(parentName, "_sd", v.ClaimHash, storage)
 							disclosures.add(v)
 						}
 					} else {
 						if v.isArrayValue() {
 
-							addToArray(parentName, v.value, storage)
-							fmt.Println("value", v.value, "parentName", parentName)
+							addToArray(parentName, v.Value, storage)
+							fmt.Println("value", v.Value, "parentName", parentName)
 
 						} else {
-							addToMap(parentName, v.name, v.value, storage)
+							addToMap(parentName, v.Name, v.Value, storage)
 							fmt.Println("Add to map")
 						}
 					}
@@ -298,25 +309,40 @@ func makeSD(parentStorage jwt.MapClaims, parentName string, parentSD bool, instr
 func (i Instructions) sdJWT() (jwt.MapClaims, disclosures, error) {
 	storage := jwt.MapClaims{}
 	disclosures := disclosures{}
-	if err := makeSD(nil, "", false, i, storage, disclosures); err != nil {
+	if err := makeSD("", false, i, storage, disclosures); err != nil {
 		return nil, nil, err
 	}
 	return storage, disclosures, nil
 }
 
-func sign(claims jwt.MapClaims, signingKey string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+// CombineInstructionsSets combines two instruction sets
+func CombineInstructionsSets(a, b Instructions) Instructions {
+	return append(a, b...)
+}
+
+func (c *Client) sign(claims jwt.MapClaims, signingKey string) (string, error) {
+	if c.config.SigningMethod == nil {
+		c.config.SigningMethod = jwt.SigningMethodHS256
+	}
+	token := jwt.NewWithClaims(c.config.SigningMethod, claims)
+
+	if c.config.JWTType == "" {
+		token.Header["typ"] = "sd-jwt"
+	} else {
+		token.Header["typ"] = c.config.JWTType
+	}
+
 	return token.SignedString([]byte(signingKey))
 }
 
 // SDJWT returns a signed SD-JWT with disclosures
 // Maybe this should return a more structured return of jwt and disclosures
-func (i Instructions) SDJWT(signingKey string) (string, error) {
+func (c *Client) SDJWT(i Instructions, signingKey string) (string, error) {
 	rawSDJWT, disclosures, err := i.sdJWT()
 	if err != nil {
 		return "", err
 	}
-	signedJWT, err := sign(rawSDJWT, signingKey)
+	signedJWT, err := c.sign(rawSDJWT, signingKey)
 	if err != nil {
 		return "", err
 	}
