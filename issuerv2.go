@@ -2,7 +2,9 @@ package gosdjwt
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -36,6 +38,7 @@ type RecursiveInstructionV2 struct {
 	DisclosureHash      string   `json:"disclosure_hash,omitempty" yaml:"disclosure_hash,omitempty"`
 	ClaimHash           string   `json:"claim_hash,omitempty" yaml:"claim_hash,omitempty"`
 	ChildrenClaimHash   []string `json:"children_claim_hash,omitempty" yaml:"children_claim_hash,omitempty"`
+	UID                 string   `json:"uid,omitempty" yaml:"uid,omitempty"`
 }
 
 // ChildInstructionV2 instructs how to build a SD-JWT
@@ -46,55 +49,105 @@ type ChildInstructionV2 struct {
 	Value               any    `json:"value,omitempty" yaml:"value,omitempty"`
 	DisclosureHash      string `json:"disclosure_hash,omitempty" yaml:"disclosure_hash,omitempty"`
 	ClaimHash           string `json:"claim_hash,omitempty" yaml:"claim_hash,omitempty"`
+	UID                 string `json:"uid,omitempty" yaml:"uid,omitempty"`
 }
 
-// ChildSliceInstructionV2 is a child with slice values
-type ChildSliceInstructionV2 struct {
-	Name                string    `json:"name,omitempty" yaml:"name,omitempty"`
-	Children            []ChildV2 `json:"children,omitempty" yaml:"children,omitempty"`
-	SelectiveDisclosure bool      `json:"sd,omitempty" yaml:"sd,omitempty"`
-	Salt                string    `json:"salt,omitempty" yaml:"salt,omitempty"`
-	Value               []any     `json:"value,omitempty" yaml:"value,omitempty"`
-	DisclosureHash      string    `json:"disclosure_hash,omitempty" yaml:"disclosure_hash,omitempty"`
-	ClaimHash           string    `json:"claim_hash,omitempty" yaml:"claim_hash,omitempty"`
+// ChildArrayInstructionV2 is a child with slice values
+type ChildArrayInstructionV2 struct {
+	Name                string               `json:"name,omitempty" yaml:"name,omitempty"`
+	Children            []ChildInstructionV2 `json:"children,omitempty" yaml:"children,omitempty"`
+	SelectiveDisclosure bool                 `json:"sd,omitempty" yaml:"sd,omitempty"`
+	Salt                string               `json:"salt,omitempty" yaml:"salt,omitempty"`
+	Value               []any                `json:"value,omitempty" yaml:"value,omitempty"`
+	DisclosureHash      string               `json:"disclosure_hash,omitempty" yaml:"disclosure_hash,omitempty"`
+	ClaimHash           string               `json:"claim_hash,omitempty" yaml:"claim_hash,omitempty"`
 }
 
-func (c *ChildV2) makeClaimHash() {
+func (c *ChildInstructionV2) makeClaimHash() {
 	c.Salt = newSalt()
 	s := fmt.Sprintf("[%q,%q,%q]", c.Salt, c.Name, c.Value)
 	c.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
 	c.ClaimHash = hash(c.DisclosureHash)
 }
 
-func (p *ParentV2) makeClaimHash() {
-	p.Salt = newSalt()
-	s := fmt.Sprintf("[%q,%q,%q]", p.Salt, p.Name, p.Children)
-	p.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
-	p.ClaimHash = hash(p.DisclosureHash)
+func (r *RecursiveInstructionV2) makeClaimHash() {
+	r.Salt = newSalt()
+
+	childClaims := map[string][]string{
+		"_sd": r.ChildrenClaimHash,
+	}
+
+	j, err := json.Marshal(childClaims)
+	if err != nil {
+		panic(err)
+	}
+
+	s := fmt.Sprintf("[%q,%q,%s]", r.Salt, r.Name, string(j))
+	r.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
+	r.ClaimHash = hash(r.DisclosureHash)
+
 }
 
-func (c *ChildArrayV2) makeClaimHash() {
+func (p *ParentInstructionV2) makeClaimHash() error {
+	p.Salt = newSalt()
+	childrenClaims, err := claimStringRepresentation(p, p.Children)
+	if err != nil {
+		return err
+	}
+	s := fmt.Sprintf("[%q,%q,%s]", p.Salt, p.Name, childrenClaims)
+	p.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
+	p.ClaimHash = hash(p.DisclosureHash)
+
+	return nil
+}
+
+func (c *ChildArrayInstructionV2) makeClaimHash() {
 	c.Salt = newSalt()
 	s := fmt.Sprintf("[%q,%q]", c.Salt, c.Name)
 	c.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
 	c.ClaimHash = hash(c.DisclosureHash)
 }
 
-func (r *RecursiveInstructionV2) recursiveHashClaim(claimKey string, claimHashes []string) {
+func (r *RecursiveInstructionV2) recursiveHashClaim(claimHashes []string) error {
 	// make claimHash of children claimHashes
 	r.Salt = newSalt()
 	childrenClaims := map[string][]string{
 		"_sd": claimHashes,
 	}
-	s := fmt.Sprintf("[%q,%q,%v]", r.Salt, r.Name, childrenClaims)
-	fmt.Println("recursiveHashClaim", s)
+
+	b, err := json.Marshal(childrenClaims)
+	if err != nil {
+		return err
+	}
+	s := fmt.Sprintf("[%q,%q,%s]", r.Salt, r.Name, string(b))
 	r.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
 	r.ClaimHash = hash(r.DisclosureHash)
+
+	return nil
 }
 
 type DisclosuresV2 map[string]Disclosure
 
-func (c *ChildV2) addToDisclosures(d DisclosuresV2) {
+func claimStringRepresentation(parent any, children []any) (string, error) {
+	stringClaims := map[string]any{}
+	for _, child := range children {
+		switch child.(type) {
+		case *ChildInstructionV2:
+			claim := child.(*ChildInstructionV2)
+			stringClaims[claim.Name] = claim.Value
+		default:
+			panic(ErrNotKnownInstruction)
+		}
+	}
+
+	d, err := json.Marshal(stringClaims)
+	if err != nil {
+		return "", err
+	}
+	return string(d), nil
+}
+
+func (c *ChildInstructionV2) addToDisclosures(d DisclosuresV2) {
 	d[newUUID()] = Disclosure{
 		salt:           c.Salt,
 		value:          c.Value,
@@ -103,7 +156,7 @@ func (c *ChildV2) addToDisclosures(d DisclosuresV2) {
 	}
 }
 
-func (p *ParentV2) addToDisclosures(d DisclosuresV2) {
+func (p *ParentInstructionV2) addToDisclosures(d DisclosuresV2) {
 	values := map[string]any{}
 	collectChildrenValues(p.Children, values)
 	d[newUUID()] = Disclosure{
@@ -114,7 +167,7 @@ func (p *ParentV2) addToDisclosures(d DisclosuresV2) {
 	}
 }
 
-func (c *ChildArrayV2) addToDisclosures(d DisclosuresV2) {
+func (c *ChildArrayInstructionV2) addToDisclosures(d DisclosuresV2) {
 	values := []any{}
 	for _, child := range c.Children {
 		values = append(values, child.Value)
@@ -128,11 +181,8 @@ func (c *ChildArrayV2) addToDisclosures(d DisclosuresV2) {
 }
 
 func (r *RecursiveInstructionV2) addToDisclosures(d DisclosuresV2) {
-	//values := map[string]any{}
-	//collectChildrenValues(r.Children, values)
 	d[newUUID()] = Disclosure{
 		salt:           r.Salt,
-		value:          "mura",
 		name:           r.Name,
 		disclosureHash: r.DisclosureHash,
 	}
@@ -144,87 +194,69 @@ func (d DisclosuresV2) ArrayHashes() []string {
 	for _, v := range d {
 		a = append(a, v.disclosureHash)
 	}
+	sort.Strings(a)
 	return a
 }
 
 func collectChildrenValues(children []any, storage map[string]any) {
 	for _, child := range children {
 		switch child.(type) {
-		case ChildV2, ChildArrayV2:
-			claim := child.(ChildV2)
+		case *ChildInstructionV2, *ChildArrayInstructionV2:
+			claim := child.(*ChildInstructionV2)
 			storage[claim.Name] = claim.Value
-		case ParentV2:
-			claim := child.(ParentV2)
+		case *ParentInstructionV2:
+			claim := child.(*ParentInstructionV2)
 			storage[claim.Name] = jwt.MapClaims{}
 			collectChildrenValues(claim.Children, storage)
 		}
 	}
 }
 
-func (c *ChildV2) makeDisclosureHash() {
-	c.Salt = newSalt()
-	s := fmt.Sprintf("[%q,%q,%q]", c.Salt, c.Name, c.Value)
-	c.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
-}
-func (p *ParentV2) makeDisclosureHash() {
-	p.Salt = newSalt()
-	s := fmt.Sprintf("[%q,%q,%q]", p.Salt, p.Name, p.Children)
-	p.DisclosureHash = base64.RawURLEncoding.EncodeToString([]byte(s))
-}
-
-type (
-	ParentV2 ParentInstructionV2
-	ChildV2  ChildInstructionV2
-
-	ChildArrayV2 ChildSliceInstructionV2
-)
-
-// InstructionsV2 is a map of InstructionV2
-type InstructionsV2 map[string]any
-
-func calculateRecursiveClaimHashes(children []any, claimHashes []string) {
-	for _, child := range children {
-		switch child.(type) {
-		case ChildV2:
-			fmt.Println("ChildV2 in RecursiveV2")
-			claim := child.(ChildV2)
-			claim.makeClaimHash()
-			claimHashes = append(claimHashes, claim.ClaimHash)
-		case ChildArrayV2:
-			fmt.Println("ChildArrayV2 in RecursiveV2")
-			claim := child.(ChildArrayV2)
-			claim.makeClaimHash()
-			claimHashes = append(claimHashes, claim.ClaimHash)
-		case ParentV2:
-			fmt.Println("ParentV2 in RecursiveV2")
-			claim := child.(ParentV2)
-			claim.makeClaimHash()
-			calculateRecursiveClaimHashes(claim.Children, claimHashes)
-
-		default:
-			panic(ErrNotKnownInstruction)
+func addUID(instruction any) {
+	switch instruction.(type) {
+	case *RecursiveInstructionV2:
+		if instruction.(*RecursiveInstructionV2).UID == "" {
+			instruction.(*RecursiveInstructionV2).UID = newUUID()
 		}
+		//	case *ParentV2:
+		//		instruction.(*ParentV2).UID = newUUID()
+	case *ChildInstructionV2:
+		if instruction.(*ChildInstructionV2).UID == "" {
+			instruction.(*ChildInstructionV2).UID = newUUID()
+		}
+		//	case *ChildArrayV2:
+		//		instruction.(*ChildArrayV2).UID = newUUID()
 	}
-	fmt.Println("claimHashes", claimHashes)
-
 }
 
-func linkChildClaimHashToParent(children []any, parent any, disclosures DisclosuresV2) {
-	for _, child := range children {
-		switch child.(type) {
-		case ChildV2:
-			fmt.Println("ChildV2 in Recursive")
-			childClaim := child.(ChildV2)
-			childClaim.makeClaimHash()
-			fmt.Println("child claimhash", childClaim.ClaimHash)
-			childClaim.makeDisclosureHash()
-			childClaim.addToDisclosures(disclosures)
+func recursiveClaimHandler(instructions []any, parent any, disclosures DisclosuresV2) {
+	for _, instruction := range instructions {
+		switch instruction.(type) {
+		case *RecursiveInstructionV2:
+			addUID(instruction)
+			child := instruction.(*RecursiveInstructionV2)
+			recursiveClaimHandler(child.Children, child, disclosures)
+			child.makeClaimHash()
+			child.addToDisclosures(disclosures)
 			switch parent.(type) {
-			case ParentV2:
 			case *RecursiveInstructionV2:
 				parentClaim := parent.(*RecursiveInstructionV2)
-				fmt.Println("parent name", parentClaim.Name, "childClaimHash", childClaim.ClaimHash)
-				parentClaim.ChildrenClaimHash = append(parentClaim.ChildrenClaimHash, childClaim.ClaimHash)
+				if parentClaim.UID == child.UID {
+					break
+				}
+				parentClaim.ChildrenClaimHash = append(parentClaim.ChildrenClaimHash, child.ClaimHash)
+			default:
+				panic(ErrNotKnownInstruction)
+			}
+		case *ChildInstructionV2:
+			addUID(instruction)
+			child := instruction.(*ChildInstructionV2)
+			child.makeClaimHash()
+			child.addToDisclosures(disclosures)
+			switch parent.(type) {
+			case *RecursiveInstructionV2:
+				parentClaim := parent.(*RecursiveInstructionV2)
+				parentClaim.ChildrenClaimHash = append(parentClaim.ChildrenClaimHash, child.ClaimHash)
 			default:
 				panic(ErrNotKnownInstruction)
 			}
@@ -237,14 +269,12 @@ func linkChildClaimHashToParent(children []any, parent any, disclosures Disclosu
 func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures DisclosuresV2) {
 	for _, i := range instructions {
 		switch i.(type) {
-		case ParentV2:
-			fmt.Println("ParentV2")
-			claim := i.(ParentV2)
+		case *ParentInstructionV2:
+			claim := i.(*ParentInstructionV2)
 
 			if claim.SelectiveDisclosure {
 				// Parent is Selective Disclosure witch means that all of its children are also Selective Disclosure, but not recursive.
 				claim.makeClaimHash()
-				claim.makeDisclosureHash()
 				addToArray("_sd", claim.ClaimHash, storage)
 
 				claim.addToDisclosures(disclosures)
@@ -257,26 +287,20 @@ func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures Disclosures
 
 		case *RecursiveInstructionV2:
 			claim := i.(*RecursiveInstructionV2)
-			fmt.Println("RecursiveInstructionV2", "name", claim.Name)
-			//calculateRecursiveClaimHashes(claim.Children, []string{})
-			linkChildClaimHashToParent(claim.Children, claim, disclosures)
+			recursiveClaimHandler(claim.Children, claim, disclosures)
 
-			fmt.Println("claimHashes children xxxx", claim.ChildrenClaimHash)
-			fmt.Println("claimHases parent xxxx", claim.ClaimHash)
+			if err := claim.recursiveHashClaim(claim.ChildrenClaimHash); err != nil {
+				panic(err)
+			}
 
-			claim.recursiveHashClaim(claim.Name, claim.ChildrenClaimHash)
-
-			// make claimHash of children claimHashes
+			claim.addToDisclosures(disclosures)
 
 			addToArray("_sd", claim.ClaimHash, storage)
 			break
 
-		case ChildV2:
-			fmt.Println("ChildV2")
-			claim := i.(ChildV2)
-
+		case *ChildInstructionV2:
+			claim := i.(*ChildInstructionV2)
 			if claim.SelectiveDisclosure {
-				fmt.Println("SelectiveDisclosure child")
 				claim.makeClaimHash()
 				claim.addToDisclosures(disclosures)
 				addToArray("_sd", claim.ClaimHash, storage)
@@ -284,10 +308,8 @@ func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures Disclosures
 				storage[claim.Name] = claim.Value
 			}
 
-		case ChildArrayV2:
-			fmt.Println("ChildSliceV2")
-			claim := i.(ChildArrayV2)
-			fmt.Println("children ", claim.Children)
+		case *ChildArrayInstructionV2:
+			claim := i.(*ChildArrayInstructionV2)
 			for _, child := range claim.Children {
 				if child.SelectiveDisclosure {
 					child.makeClaimHash()
@@ -303,4 +325,29 @@ func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures Disclosures
 			panic(ErrNotKnownInstruction)
 		}
 	}
+}
+
+func verifyClaim(claimHash, disclosureHash string) bool {
+	return hash(disclosureHash) == claimHash
+}
+
+func decodeDisclosureHash(hash string) (string, error) {
+	decoded, err := base64.RawStdEncoding.DecodeString(hash)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decoded), nil
+}
+
+func (d DisclosuresV2) decodeHashes() (map[string]string, error) {
+	decoded := map[string]string{}
+	for k, v := range d {
+		decodedDisclosure, err := decodeDisclosureHash(v.disclosureHash)
+		if err != nil {
+			return nil, err
+		}
+		decoded[k] = decodedDisclosure
+	}
+	return decoded, nil
 }
