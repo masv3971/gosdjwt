@@ -3,7 +3,9 @@
         "cmpopts",
         "devcontainers",
         "dgrijalva",
+        "gosdjwt",
         "masv",
+        "randutil",
         "SDJWT",
         "stretchr",
         "zenor"

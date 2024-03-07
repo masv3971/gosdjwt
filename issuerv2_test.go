@@ -412,10 +412,10 @@ func TestMakeSDV2(t *testing.T) {
 			}
 			storage := jwt.MapClaims{}
 			disclosures := DisclosuresV2{}
-			makeSDV2(tt.have, storage, disclosures)
+			err := makeSDV2(tt.have, storage, disclosures)
+			assert.NoError(t, err)
 
 			//s, err := json.Marshal(storage)
-			//assert.NoError(t, err)
 			//fmt.Println("storage", string(s))
 			testClaim(t, tt.want.inversSelectiveDisclosureClaim)
 
@@ -460,7 +460,8 @@ func TestRecursiveClaimHandler(t *testing.T) {
 				return "salt_zyx"
 			}
 			disclosures := DisclosuresV2{}
-			recursiveClaimHandler(tt.have, tt.have[0], disclosures)
+			err := recursiveClaimHandler(tt.have, tt.have[0], disclosures)
+			assert.NoError(t, err)
 
 			parent := tt.have[0].(*RecursiveInstructionV2)
 			fmt.Printf("first parent, name: %s\n", parent.Name)
