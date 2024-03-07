@@ -128,6 +128,8 @@ func (r *RecursiveInstructionV2) recursiveHashClaim(claimHashes []string) error 
 
 type DisclosuresV2 map[string]Disclosure
 
+type InstructionsV2 []any
+
 func claimStringRepresentation(parent any, children []any) (string, error) {
 	stringClaims := map[string]any{}
 	for _, child := range children {
@@ -266,7 +268,7 @@ func recursiveClaimHandler(instructions []any, parent any, disclosures Disclosur
 	}
 }
 
-func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures DisclosuresV2) {
+func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures DisclosuresV2) error {
 	for _, i := range instructions {
 		switch i.(type) {
 		case *ParentInstructionV2:
@@ -290,7 +292,7 @@ func makeSDV2(instructions []any, storage jwt.MapClaims, disclosures Disclosures
 			recursiveClaimHandler(claim.Children, claim, disclosures)
 
 			if err := claim.recursiveHashClaim(claim.ChildrenClaimHash); err != nil {
-				panic(err)
+				return err
 			}
 
 			claim.addToDisclosures(disclosures)
