@@ -14,9 +14,9 @@ const (
 	SignaturePolicyFailed = "failed"
 )
 
-func splitSDJWT(sdjwt string) StandardPresentation {
+func splitSDJWT(sdjwt string) PresentationFlat {
 	split := strings.Split(sdjwt, "~")
-	presentation := StandardPresentation{}
+	presentation := PresentationFlat{}
 	if len(split) >= 1 {
 		presentation.JWT = split[0]
 	}
@@ -30,13 +30,36 @@ func splitSDJWT(sdjwt string) StandardPresentation {
 	return presentation
 }
 
+func parseToken(token string) (string, []byte, error) {
+	parts := strings.Split(token, ".")
+
+	signatureString := strings.Join(parts[0:2], ".")
+	sig, err := jwt.NewParser().DecodeSegment(parts[2])
+	if err != nil {
+		return "", nil, err
+	}
+
+	return signatureString, sig, nil
+}
+
+// VerifySignature verifies the signature of a token
+func VerifySignature(token, signingAlg string, pubKey any) error {
+	signingString, sig, err := parseToken(token)
+	if err != nil {
+		return err
+	}
+
+	jwtToken, _ := jwt.Parse(token, nil)
+	return jwtToken.Method.Verify(signingString, sig, pubKey)
+}
+
 func parseJWTAndValidate(sdjwt, key string) (jwt.MapClaims, *Validation, error) {
 	c := jwt.MapClaims{}
 	validation := &Validation{
 		SignaturePolicy: SignaturePolicyPassed, // TODO(masv): Fix this
 	}
 
-	token, err := jwt.ParseWithClaims(sdjwt, c, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(sdjwt, c, func(token *jwt.Token) (any, error) {
 		return []byte(key), nil
 	})
 	if err != nil {
@@ -51,14 +74,21 @@ func parseJWTAndValidate(sdjwt, key string) (jwt.MapClaims, *Validation, error) 
 	return nil, validation, ErrTokenNotValid
 }
 
-func run(claims jwt.MapClaims, s []string) jwt.MapClaims {
-	disclosures := disclosures{}
-	disclosures.new(s)
+// TODO(masv): whats the point of this?
+func run(claims jwt.MapClaims, s []string) (jwt.MapClaims, error) {
+	disclosures := DisclosuresV2{}
+	if err := disclosures.new(s); err != nil {
+		return nil, err
 
-	addClaims(claims, disclosures, "")
+	}
+
+	_, err := addClaims(claims, disclosures, "")
+	if err != nil {
+		return nil, err
+	}
 
 	removeSDClaims(claims)
-	return claims
+	return claims, nil
 }
 
 func removeSDClaims(claims jwt.MapClaims) {
@@ -68,22 +98,25 @@ func removeSDClaims(claims jwt.MapClaims) {
 			delete(claims, claimKey)
 		}
 
-		switch claimValue.(type) {
+		switch claimV := claimValue.(type) {
 		case jwt.MapClaims:
-			removeSDClaims(claimValue.(jwt.MapClaims))
+			removeSDClaims(claimV)
 		case map[string]any:
-			removeSDClaims(claimValue.(map[string]any))
+			removeSDClaims(claimV)
 		}
 	}
 	fmt.Println("claims", claims)
 }
 
-func addClaims(claims jwt.MapClaims, disclosures disclosures, parentName string) (jwt.MapClaims, error) {
+func addClaims(claims jwt.MapClaims, disclosures DisclosuresV2, parentName string) (jwt.MapClaims, error) {
 	for claimKey, claimValue := range claims {
 
-		switch claimValue.(type) {
+		switch claimV := claimValue.(type) {
 		case jwt.MapClaims:
-			addClaims(claimValue.(jwt.MapClaims), disclosures, claimKey)
+			_, err := addClaims(claimV, disclosures, claimKey)
+			if err != nil {
+				return nil, err
+			}
 
 		case []any:
 			fmt.Println("digg deeper in array")
@@ -122,7 +155,10 @@ func Verify(sdjwt, key string) (jwt.MapClaims, *Validation, error) {
 		return nil, nil, err
 	}
 
-	j := run(claims, sd.Disclosures)
+	j, err := run(claims, sd.Disclosures)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return j, validation, nil
 }
