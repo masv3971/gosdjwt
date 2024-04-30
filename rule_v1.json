@@ -1,0 +1,11 @@
+{
+    "personalDetails": {
+        "sdjwt::parent": "",
+        "surnameAtBirth": "sdjwt::rule::selective_disclosure",
+        "address": {
+            "sdjwt::parent": "sdjwt::rule::selective_disclosure",
+            "street": "",
+            "city": "sdjwt::rule::selective_disclosure"
+        }
+    }
+}

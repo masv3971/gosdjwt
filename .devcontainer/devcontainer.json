@@ -10,7 +10,6 @@
 				"cSpell.language": "en-GB,en,sv"
 			},
 			"extensions": [
-				//"GitHub.copilot",
 				"GitHub.vscode-pull-request-github",
 				"streetsidesoftware.code-spell-checker",
 				"streetsidesoftware.code-spell-checker-swedish",
@@ -22,5 +21,6 @@
 	"mounts": [
 		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
 	],
+	"postCreateCommand": "make vscode",
 	"remoteUser": "vscode"
 }

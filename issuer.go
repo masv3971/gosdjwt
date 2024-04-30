@@ -282,7 +282,7 @@ func (i InstructionsV2) SDJWT(signingMethod jwt.SigningMethod, signingKey string
 	if err != nil {
 		return nil, err
 	}
-	signedJWT, err := sign(rawSDJWT, signingMethod, signingKey)
+	signedJWT, err := sign(rawSDJWT, signingMethod, []byte(signingKey))
 	if err != nil {
 		return nil, err
 	}
